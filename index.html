@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+</head>
+
+<body>
+    <button onclick="button_onclick()">Start</button>
+    <img id="frame" />
+    <script>
+        const img = document.getElementById("frame");
+        const url = "ws://localhost:7001/ws/frame";
+        let client = new WebSocket(url);
+        client.addEventListener("open", () => {
+            console.log("Websocket open event " + url);
+        });
+
+        client.addEventListener("close", (event) => {
+            console.log("Websocket close event from " + url + ", reason :" + event.reason + ", code: " + event.code);
+            client = null;
+        });
+
+        client.addEventListener("error", (err) => {
+            console.log("Websocket error event: " + err.message + ", error code = " + err.code + ", error reason = " + err.reason);
+        });
+
+        client.addEventListener("message", (event) => {
+            if (event?.data) {
+                const data = JSON.parse(event.data)
+                if (data.type === "ack") {
+                    calculate_socket_latency(data)
+                    return
+                }
+
+                img.src = "data:image/jpeg;base64," + data.frame;
+                console.log(`received frame at: ${data.server_ts}`)
+                client.send(JSON.stringify({ type: 'ack', server_ts: data.server_ts, client_ts: performance.now() }))
+            }
+        });
+
+        function calculate_socket_latency(data) {
+            client_ack_ts = performance.now()
+            ack_round_trip_time = client_ack_ts - data.client_ts
+            ack_one_way = ack_round_trip_time / 2
+            vid_round_trip_time = (data.server_ack_ts - data.server_ts) * 1000
+            vid_one_way = vid_round_trip_time - ack_one_way
+            console.log(vid_one_way)
+        }
+
+
+        function button_onclick() {
+            client.send(JSON.stringify({ "type": "start" }))
+        }
+    </script>
+</body>
+
+</html>
